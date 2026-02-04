@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3 Gateway 管理员后台</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            padding-top: 50px;
+        }
+        .container {
+            width: 500px;
+            background-color: #1e293b;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        h1 { text-align: center; color: #38bdf8; margin-bottom: 30px; }
+        .card {
+            background-color: #334155;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #475569;
+        }
+        h2 { margin-top: 0; font-size: 18px; color: #94a3b8; border-bottom: 1px solid #475569; padding-bottom: 10px;}
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #0f172a;
+            border: 1px solid #475569;
+            color: white;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #38bdf8;
+            color: #0f172a;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+        button:hover { background-color: #0ea5e9; }
+        button.connect-btn { background-color: #f59e0b; color: black; }
+
+        .result { margin-top: 10px; font-family: monospace; font-size: 14px; word-break: break-all; min-height: 20px; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .loading { color: #fbbf24; }
+        .wallet-info { text-align: right; margin-bottom: 10px; font-size: 12px; color: #94a3b8;}
+
+        /* 新增：RPC显示样式 */
+        .rpc-box {
+            background: #0f172a;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px dashed #3b82f6;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #38bdf8;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Gateway 管理员后台</h1>
+
+    <div class="wallet-info">
+        <span id="walletAddress">未连接钱包</span>
+    </div>
+    <button id="btnConnect" class="connect-btn" onclick="connectMetaMask()">唤醒 MetaMask 获取地址</button>
+
+    <div style="height: 20px;"></div>
+
+    <div class="card" style="border-color: #3b82f6;">
+        <h2 style="color: #3b82f6; border-color: #1e3a8a;">网络配置 (Tenderly)</h2>
+        <p style="font-size: 12px; color: #aaa;">从服务端获取 RPC，并自动添加到 MetaMask</p>
+        <button onclick="getBackendRpcUrl()" style="background-color: #3b82f6; color: white;">
+            获取配置并添加网络
+        </button>
+        <div id="rpcResult" class="result"></div>
+    </div>
+
+    <div class="card">
+        <h2>查询余额 (Go Backend)</h2>
+        <input type="text" disabled id="queryAddress" placeholder="等待连接钱包..." value="">
+        <button onclick="callBackendBalance()">查询余额</button>
+        <div id="balanceResult" class="result"></div>
+    </div>
+
+    <div class="card">
+        <h2>管理员转账 (Go Backend)</h2>
+        <p style="font-size: 12px; color: #aaa;">热账户给下方地址转账</p>
+        <input type="text" disabled id="toAddress" placeholder="接收方地址 (等待连接...)" value="">
+        <div style="display: flex; justify-content: center; align-items: center;">
+            <input type="number" id="amount" placeholder="金额 (USDT)" value="1">
+            <div style="margin-left: 6px; color: #fff; font-size: 22px;">USDT</div>
+        </div>
+        <button onclick="callBackendTransfer()">确认转账</button>
+        <div id="transferResult" class="result"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = "http://localhost:8888";
+    let currentAccount = "";
+
+    // --- 使用 Ethers 唤醒小狐狸 ---
+    async function connectMetaMask() {
+        if (!window.ethereum) {
+            alert("未检测到 MetaMask，请先安装！");
+            return;
+        }
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const accounts = await provider.send("eth_requestAccounts", []);
+            currentAccount = accounts[0];
+            updateUI(currentAccount);
+        } catch (error) {
+            console.error(error);
+            alert("连接取消或失败: " + error.message);
+        }
+    }
+
+    function updateUI(address) {
+        document.getElementById('walletAddress').innerText = `当前连接: ${address}`;
+        document.getElementById('btnConnect').innerText = "已获取地址";
+        document.getElementById('btnConnect').disabled = true;
+        document.getElementById('queryAddress').value = address;
+        document.getElementById('toAddress').value = address;
+    }
+
+    // --- 获取服务端 RPC 并添加到 MetaMask ---
+    async function getBackendRpcUrl() {
+        const resultDiv = document.getElementById('rpcResult');
+        resultDiv.innerHTML = '<span class="loading">正在获取服务端 RPC 配置...</span>';
+
+        try {
+            // 1. 请求 Go 服务端
+            const response = await fetch(`${API_BASE}/getRpcUrl`);
+            const res = await response.json();
+
+            if (res.code === 200 && res.data && res.data.rpcUrl) {
+                const rpcUrl = res.data.rpcUrl;
+
+                // 显示成功 UI
+                resultDiv.innerHTML = `
+                    <span class="success">获取成功!</span>
+                    <div class="rpc-box">${rpcUrl}</div>
+                `;
+
+                // 动态检测 ChainID 并添加
+                await addTenderlyToMetaMask(rpcUrl, resultDiv);
+
+            } else {
+                resultDiv.innerHTML = `<span class="error">获取失败: ${res.message}</span>`;
+            }
+
+        } catch (e) {
+            console.error(e);
+            resultDiv.innerHTML = `<span class="error">网络错误: 服务端未启动</span>`;
+        }
+    }
+
+    // 添加网络到 MetaMask
+    async function addTenderlyToMetaMask(rpcUrl, resultDiv) {
+        try {
+            // Ethers 连接 RPC 查询出 ChainID
+            const tempProvider = new ethers.JsonRpcProvider(rpcUrl);
+            const network = await tempProvider.getNetwork();
+            const chainIdDec = network.chainId;
+            const chainIdHex = "0x" + chainIdDec.toString(16); // 转成 16 进制字符串
+
+            console.log(`检测到 RPC ChainID: ${chainIdDec} (${chainIdHex})`);
+
+            // B. 询问用户
+            if(!confirm(`检测到后端使用 Tenderly 网络 (ChainID: ${chainIdDec})。\n是否要添加到您的 MetaMask？`)) {
+                resultDiv.innerHTML += `<br><span style="color:#aaa">用户取消添加网络</span>`;
+                return;
+            }
+
+            // 发送添加请求
+            await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                    chainId: chainIdHex,
+                    chainName: 'Tenderly Virtual Testnet', // 显示在小狐狸里的名字
+                    rpcUrls: [rpcUrl], // 后端返回的带 Key 的 URL
+                    nativeCurrency: {
+                        name: 'ETH',
+                        symbol: 'ETH', // 测试币符号
+                        decimals: 18
+                    },
+                }]
+            });
+
+            resultDiv.innerHTML += `<br><span class="success">网络已添加/切换成功！</span>`;
+
+        } catch (error) {
+            console.error(error);
+            // 错误处理：如果网络已存在，MetaMask 可能会报错，这里尝试切换
+            if (error.code === 4902) {
+                resultDiv.innerHTML += `<br><span class="error">添加失败: ${error.message}</span>`;
+            } else {
+                resultDiv.innerHTML += `<br><span class="error">注意: ${error.message}</span>`;
+            }
+        }
+    }
+
+
+    // --- 查余额 API ---
+    async function callBackendBalance() {
+        const addr = document.getElementById('queryAddress').value;
+        const resultDiv = document.getElementById('balanceResult');
+        if (!addr) return alert("请输入地址");
+
+        resultDiv.innerHTML = '<span class="loading">正在查询中...</span>';
+        try {
+            const response = await fetch(`${API_BASE}/balance?address=${addr}`);
+            const data = await response.json();
+            if (data.code === 200 || data.balance !== undefined) {
+                const bal = data.data ? data.data.balance : data.balance;
+                resultDiv.innerHTML = `<span class="success">账户当前余额: ${bal} USDT</span>`;
+            } else {
+                resultDiv.innerHTML = `<span class="error">错误: ${data.msg}</span>`;
+            }
+        } catch (e) {
+            resultDiv.innerHTML = `<span class="error">服务端未启动</span>`;
+        }
+    }
+
+    // --- 转账 API ---
+    async function callBackendTransfer() {
+        const to = document.getElementById('toAddress').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const resultDiv = document.getElementById('transferResult');
+        if (!to || amount <= 0) return alert("参数错误");
+
+        resultDiv.innerHTML = '<span class="loading">正常转账中...</span>';
+        try {
+            const response = await fetch(`${API_BASE}/transfer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ toAddress: to, amount: amount })
+            });
+            const data = await response.json();
+            if (data.code === 200 || data.txHash) {
+                const tx = data.data ? data.data.txHash : data.txHash;
+                const link = `https://dashboard.tenderly.co/tx/${tx}`;
+                resultDiv.innerHTML = `
+                    <span class="success">广播成功!</span><br>
+                    Hash: <a href="${link}" target="_blank" style="color:#38bdf8">${tx.substring(0,10)}...</a>
+                `;
+            } else {
+                resultDiv.innerHTML = `<span class="error">失败: ${data.msg}</span>`;
+            }
+        } catch (e) {
+            resultDiv.innerHTML = `<span class="error">网络错误</span>`;
+        }
+    }
+</script>
+</body>
+</html>
