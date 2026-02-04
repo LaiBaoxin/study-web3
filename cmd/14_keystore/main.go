@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,12 +28,24 @@ func main() {
 	// 1. 生成随机私钥
 	// 2. 使用密码加密私钥
 	// 3. 在 ksDir 下生成 UTC-xxx-xxx的 json 文件
-	account, err := ks.NewAccount(myPassward)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	fmt.Printf("创建账户成功,新账户地址: %s  , \n 文件存储位置: %s \n", account.Address, account.URL.Path)
+	var (
+		account accounts.Account
+		err     error
+	)
+
+	// 检查是否存在现有的账户
+	if len(ks.Accounts()) > 0 {
+		// 已经存在了有账户了，直接使用第一个账户
+		account = ks.Accounts()[0]
+		fmt.Printf("账户已经存在，账户地址: %s  , \n 文件存储位置: %s \n", account.Address, account.URL.Path)
+	} else {
+		account, err = ks.NewAccount(myPassward)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("创建账户成功,新账户地址: %s  , \n 文件存储位置: %s \n", account.Address, account.URL.Path)
+	}
 
 	// 读取并且解密keystore加密后的账户文件
 	jsonBytes, err := os.ReadFile(account.URL.Path)
