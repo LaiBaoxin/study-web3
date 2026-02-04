@@ -37,7 +37,7 @@ type Struct0 struct {
 
 // MulticallMetaData contains all meta data concerning the Multicall contract.
 var MulticallMetaData = &bind.MetaData{
-	ABI: "[{\"constant\":false,\"inputs\":[{\"components\":[{\"name\":\"target\",\"type\":\"address\"},{\"name\":\"callData\",\"type\":\"bytes\"}],\"name\":\"calls\",\"type\":\"tuple[]\"}],\"name\":\"aggregate\",\"outputs\":[{\"name\":\"blockNumber\",\"type\":\"uint256\"},{\"name\":\"returnData\",\"type\":\"bytes[]\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"constant\":true,\"inputs\":[{\"components\":[{\"name\":\"target\",\"type\":\"address\"},{\"name\":\"callData\",\"type\":\"bytes\"}],\"name\":\"calls\",\"type\":\"tuple[]\"}],\"name\":\"aggregate\",\"outputs\":[{\"name\":\"blockNumber\",\"type\":\"uint256\"},{\"name\":\"returnData\",\"type\":\"bytes[]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"}]",
 }
 
 // MulticallABI is the input ABI used to generate the binding from.
@@ -186,23 +186,47 @@ func (_Multicall *MulticallTransactorRaw) Transact(opts *bind.TransactOpts, meth
 	return _Multicall.Contract.contract.Transact(opts, method, params...)
 }
 
-// Aggregate is a paid mutator transaction binding the contract method 0x252dba42.
+// Aggregate is a free data retrieval call binding the contract method 0x252dba42.
 //
-// Solidity: function aggregate((address,bytes)[] calls) returns(uint256 blockNumber, bytes[] returnData)
-func (_Multicall *MulticallTransactor) Aggregate(opts *bind.TransactOpts, calls []Struct0) (*types.Transaction, error) {
-	return _Multicall.contract.Transact(opts, "aggregate", calls)
+// Solidity: function aggregate((address,bytes)[] calls) view returns(uint256 blockNumber, bytes[] returnData)
+func (_Multicall *MulticallCaller) Aggregate(opts *bind.CallOpts, calls []Struct0) (struct {
+	BlockNumber *big.Int
+	ReturnData  [][]byte
+}, error) {
+	var out []interface{}
+	err := _Multicall.contract.Call(opts, &out, "aggregate", calls)
+
+	outstruct := new(struct {
+		BlockNumber *big.Int
+		ReturnData  [][]byte
+	})
+	if err != nil {
+		return *outstruct, err
+	}
+
+	outstruct.BlockNumber = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.ReturnData = *abi.ConvertType(out[1], new([][]byte)).(*[][]byte)
+
+	return *outstruct, err
+
 }
 
-// Aggregate is a paid mutator transaction binding the contract method 0x252dba42.
+// Aggregate is a free data retrieval call binding the contract method 0x252dba42.
 //
-// Solidity: function aggregate((address,bytes)[] calls) returns(uint256 blockNumber, bytes[] returnData)
-func (_Multicall *MulticallSession) Aggregate(calls []Struct0) (*types.Transaction, error) {
-	return _Multicall.Contract.Aggregate(&_Multicall.TransactOpts, calls)
+// Solidity: function aggregate((address,bytes)[] calls) view returns(uint256 blockNumber, bytes[] returnData)
+func (_Multicall *MulticallSession) Aggregate(calls []Struct0) (struct {
+	BlockNumber *big.Int
+	ReturnData  [][]byte
+}, error) {
+	return _Multicall.Contract.Aggregate(&_Multicall.CallOpts, calls)
 }
 
-// Aggregate is a paid mutator transaction binding the contract method 0x252dba42.
+// Aggregate is a free data retrieval call binding the contract method 0x252dba42.
 //
-// Solidity: function aggregate((address,bytes)[] calls) returns(uint256 blockNumber, bytes[] returnData)
-func (_Multicall *MulticallTransactorSession) Aggregate(calls []Struct0) (*types.Transaction, error) {
-	return _Multicall.Contract.Aggregate(&_Multicall.TransactOpts, calls)
+// Solidity: function aggregate((address,bytes)[] calls) view returns(uint256 blockNumber, bytes[] returnData)
+func (_Multicall *MulticallCallerSession) Aggregate(calls []Struct0) (struct {
+	BlockNumber *big.Int
+	ReturnData  [][]byte
+}, error) {
+	return _Multicall.Contract.Aggregate(&_Multicall.CallOpts, calls)
 }
