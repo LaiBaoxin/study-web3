@@ -36,6 +36,29 @@ func InitClient() *ethclient.Client {
 	return client
 }
 
+// InitWSClient 创建一个 WebSocket 客户端
+func InitWSClient() *ethclient.Client {
+	// 加载配置文件
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("err: 加载配置文件 .env 失败")
+		return nil
+	}
+	wsUrl := os.Getenv("WS_URL")
+	// 判断是否存在一个连接地址
+	if wsUrl == "" {
+		log.Fatal("err: WS_URL 为空")
+		return nil
+	}
+	// 创建一个 WebSocket 客户端
+	client, err := ethclient.Dial(wsUrl)
+	if err != nil {
+		log.Fatal("err: ws节点连接失败", err)
+		return nil
+	}
+	return client
+}
+
 // GetChainID 获取当前链的 ChainID
 func GetChainID(ctx context.Context, client *ethclient.Client) *big.Int {
 	cId, err := client.ChainID(ctx)
